@@ -1,0 +1,23 @@
+# Secrets / environment files
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# PHP / Laravel
+/vendor/
+
+# Downloads / temporary installers
+*.zip
+*.msi
+*.exe
+*.tmp
+*.log
+
+# Local test output
+test-output/

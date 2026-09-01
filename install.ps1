@@ -2,6 +2,66 @@
 
 $ErrorActionPreference = "Stop"
 
+# ============================================================
+# Windows Laravel Development Environment
+# ============================================================
+
+if ($PSVersionTable.Platform -ne "Win32NT") {
+
+    Write-Host ""
+    Write-Host "============================================================" -ForegroundColor Yellow
+    Write-Host "       Windows Laravel Development Environment" -ForegroundColor Yellow
+    Write-Host "============================================================" -ForegroundColor Yellow
+    Write-Host ""
+
+    Write-Host "This installer is designed for Windows only." -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Detected platform: $($PSVersionTable.Platform)" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "No changes were made to this computer." -ForegroundColor Green
+    Write-Host ""
+
+    exit 1
+}
+
+$RootDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+$ConfigFile = Join-Path `
+    $RootDirectory `
+    "config\requirements.json"
+
+$scriptsDirectory = Join-Path `
+    $RootDirectory `
+    "scripts"
+
+# ============================================================
+# Load configuration
+# ============================================================
+
+if (-not (Test-Path $ConfigFile)) {
+    throw "Configuration file not found: $ConfigFile"
+}
+
+$config = Get-Content `
+    $ConfigFile `
+    -Raw |
+    ConvertFrom-Json
+
+# ============================================================
+# Load modules
+# ============================================================
+
+. (Join-Path $scriptsDirectory "preflight.ps1")
+. (Join-Path $scriptsDirectory "php.ps1")
+. (Join-Path $scriptsDirectory "composer.ps1")
+. (Join-Path $scriptsDirectory "mysql.ps1")
+. (Join-Path $scriptsDirectory "python.ps1")
+. (Join-Path $scriptsDirectory "verify.ps1")
+
+# ============================================================
+# Header
+# ============================================================
+
 Clear-Host
 
 Write-Host ""
@@ -9,269 +69,81 @@ Write-Host "============================================================" -Foreg
 Write-Host "       Windows Laravel Development Environment" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Preflight check - no software will be installed." -ForegroundColor Gray
-Write-Host ""
 
-$failed = 0
-$warnings = 0
-
-function Check {
-    param(
-        [string]$Name,
-        [bool]$Pass,
-        [string]$Message
-    )
-
-    if ($Pass) {
-        Write-Host ("  [PASS] {0,-28} {1}" -f $Name, $Message) -ForegroundColor Green
-    }
-    else {
-        Write-Host ("  [FAIL] {0,-28} {1}" -f $Name, $Message) -ForegroundColor Red
-        $script:failed++
-    }
-}
-
-function Warn {
-    param(
-        [string]$Name,
-        [string]$Message
-    )
-
-    Write-Host ("  [WARN] {0,-28} {1}" -f $Name, $Message) -ForegroundColor Yellow
-    $script:warnings++
-}
+Write-Host "Configuration loaded." -ForegroundColor Green
 
 # ============================================================
-# Administrator
-# ============================================================
-
-Write-Host "SYSTEM" -ForegroundColor Cyan
-Write-Host ""
-
-$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-$principal = New-Object Security.Principal.WindowsPrincipal($identity)
-
-$isAdmin = $principal.IsInRole(
-    [Security.Principal.WindowsBuiltInRole]::Administrator
-)
-
-Check "Administrator" $isAdmin `
-    $(if ($isAdmin) { "Yes" } else { "Run PowerShell as Administrator" })
-
-# ============================================================
-# Windows
-# ============================================================
-
-$os = Get-CimInstance Win32_OperatingSystem
-
-$isWindows10 = $os.Caption -match "Windows 10"
-$is64Bit = $os.OSArchitecture -eq "64-bit"
-
-Check "Windows 10" $isWindows10 $os.Caption
-Check "64-bit" $is64Bit $os.OSArchitecture
-
-# ============================================================
-# CPU
-# ============================================================
-
-$cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
-
-$cores = $cpu.NumberOfLogicalProcessors
-
-Check "CPU" ($cores -ge 2) "$cores logical processors"
-
-Write-Host ""
-Write-Host "MEMORY & STORAGE" -ForegroundColor Cyan
-Write-Host ""
-
-# ============================================================
-# RAM
-# ============================================================
-
-$ramGB = [math]::Round(
-    $os.TotalVisibleMemorySize / 1MB,
-    2
-)
-
-Check "RAM" ($ramGB -ge 4) "$ramGB GB"
-
-if ($ramGB -lt 8) {
-    Warn "RAM recommendation" "8 GB+ recommended"
-}
-
-# ============================================================
-# Disk
-# ============================================================
-
-$disk = Get-CimInstance Win32_LogicalDisk `
-    -Filter "DeviceID='C:'"
-
-$freeGB = [math]::Round(
-    $disk.FreeSpace / 1GB,
-    2
-)
-
-Check "C: free space" ($freeGB -ge 10) "$freeGB GB free"
-
-# ============================================================
-# Internet
+# Preflight
 # ============================================================
 
 Write-Host ""
-Write-Host "NETWORK" -ForegroundColor Cyan
+Write-Host "Running preflight checks..." -ForegroundColor Cyan
 Write-Host ""
 
-try {
-
-    $internet = Test-NetConnection `
-        -ComputerName "www.google.com" `
-        -Port 443 `
-        -InformationLevel Quiet `
-        -WarningAction SilentlyContinue
-
-    Check "Internet" $internet `
-        $(if ($internet) { "HTTPS available" } else { "No HTTPS connection" })
-
-}
-catch {
-
-    Warn "Internet" "Could not verify connection"
-
-}
+$system = Invoke-Preflight
 
 # ============================================================
-# Existing software
+# Detection
 # ============================================================
 
 Write-Host ""
-Write-Host "EXISTING DEVELOPMENT TOOLS" -ForegroundColor Cyan
+Write-Host "Detecting development tools..." -ForegroundColor Cyan
 Write-Host ""
 
-# PHP
-$php = Get-Command php -ErrorAction SilentlyContinue
-
-if ($php) {
-
-    $version = (& php -v 2>$null | Select-Object -First 1).ToString()
-
-    Write-Host "  PHP" -ForegroundColor White
-    Write-Host "      Location : $($php.Source)"
-    Write-Host "      Version  : $version"
-
+Write-Host "PHP 8.5:"
+if (Test-PHP85) {
+    Write-Host "  Already installed." -ForegroundColor Green
 }
 else {
-
-    Warn "PHP" "Not installed"
-
+    Write-Host "  Installation required." -ForegroundColor Yellow
 }
 
-# Composer
-$composer = Get-Command composer -ErrorAction SilentlyContinue
-
-if ($composer) {
-
-    $version = (& composer --version 2>$null |
-        Select-Object -First 1).ToString()
-
-    Write-Host "  Composer" -ForegroundColor White
-    Write-Host "      Location : $($composer.Source)"
-    Write-Host "      Version  : $version"
-
+Write-Host ""
+Write-Host "Composer:"
+if (Test-Composer) {
+    Write-Host "  $(Get-ComposerVersion)" -ForegroundColor Green
 }
 else {
-
-    Warn "Composer" "Not installed"
-
+    Write-Host "  Installation required." -ForegroundColor Yellow
 }
 
-# MySQL
-$mysql = Get-Command mysql -ErrorAction SilentlyContinue
-
-if ($mysql) {
-
-    $version = (& mysql --version 2>$null |
-        Select-Object -First 1).ToString()
-
-    Write-Host "  MySQL" -ForegroundColor White
-    Write-Host "      Location : $($mysql.Source)"
-    Write-Host "      Version  : $version"
-
+Write-Host ""
+Write-Host "MySQL:"
+if (Test-MySQL) {
+    Write-Host "  $(Get-MySQLVersion)" -ForegroundColor Green
 }
 else {
-
-    Warn "MySQL" "Not installed"
-
+    Write-Host "  Installation required." -ForegroundColor Yellow
 }
 
-# Python
-$python = Get-Command python -ErrorAction SilentlyContinue
-
-if ($python) {
-
-    $version = (& python --version 2>&1 |
-        Select-Object -First 1).ToString()
-
-    Write-Host "  Python" -ForegroundColor White
-    Write-Host "      Location : $($python.Source)"
-    Write-Host "      Version  : $version"
-
+Write-Host ""
+Write-Host "Python:"
+if (Test-Python) {
+    Write-Host "  $(Get-PythonVersion)" -ForegroundColor Green
 }
 else {
-
-    Warn "Python" "Not installed"
-
-}
-
-# Git
-$git = Get-Command git -ErrorAction SilentlyContinue
-
-if ($git) {
-
-    $version = (& git --version 2>$null |
-        Select-Object -First 1).ToString()
-
-    Write-Host "  Git" -ForegroundColor White
-    Write-Host "      Location : $($git.Source)"
-    Write-Host "      Version  : $version"
-
-}
-else {
-
-    Warn "Git" "Not installed"
-
+    Write-Host "  Installation required." -ForegroundColor Yellow
 }
 
 # ============================================================
-# Result
+# Installation
 # ============================================================
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "                    PREFLIGHT RESULT" -ForegroundColor Cyan
+Write-Host "Installation stage" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host ""
 
-Write-Host "  Failed   : $failed"
-Write-Host "  Warnings : $warnings"
-Write-Host ""
+Write-Host "Installation modules are ready."
+Write-Host "Actual Windows installation will be enabled after testing."
 
-if ($failed -eq 0) {
+# ============================================================
+# Verification
+# ============================================================
 
-    Write-Host "  SYSTEM STATUS: READY" -ForegroundColor Green
-    Write-Host ""
-    Write-Host "  The computer meets the minimum requirements." `
-        -ForegroundColor Green
-
-}
-else {
-
-    Write-Host "  SYSTEM STATUS: NOT READY" -ForegroundColor Red
-    Write-Host ""
-    Write-Host "  Installation should not continue." `
-        -ForegroundColor Red
-
-}
+Invoke-FinalVerification
 
 Write-Host ""
-Write-Host "No software was installed." -ForegroundColor Gray
+Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host ""

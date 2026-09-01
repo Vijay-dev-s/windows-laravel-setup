@@ -1,0 +1,50 @@
+{
+  "platform": {
+    "architectures": [
+      "64-bit"
+    ],
+    "windowsVersions": [
+      "Windows 10",
+      "Windows 11"
+    ],
+    "minimumRamGB": 4,
+    "recommendedRamGB": 8,
+    "minimumFreeSpaceGB": 10
+  },
+  "php": {
+    "majorMinor": "8.5",
+    "architecture": "x64",
+    "build": "nts",
+    "compiler": "vs17",
+    "installDirectory": "C:\\php",
+    "downloadUrl": "https://windows.php.net/downloads/releases/php-8.5-nts-Win32-vs17-x64-latest.zip",
+    "extensions": [
+      "curl",
+      "fileinfo",
+      "mbstring",
+      "openssl",
+      "pdo",
+      "pdo_mysql",
+      "tokenizer",
+      "xml",
+      "ctype",
+      "zip"
+    ]
+  },
+  "composer": {
+    "channel": "stable",
+    "majorVersion": 2
+  },
+  "mysql": {
+    "majorMinor": "8.4",
+    "installDirectory": "C:\\mysql",
+    "port": 3306
+  },
+  "python": {
+    "minimumMajor": 3,
+    "venv": true
+  },
+  "node": {
+    "install": false
+  }
+}
